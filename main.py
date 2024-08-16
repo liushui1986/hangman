@@ -1,61 +1,48 @@
+from flask import Flask, render_template, request, redirect, url_for, session
 import random
 from hangman_words import word_list
-from hangman_art import logo
-from hangman_art import stages
+from hangman_art import logo, stages
 
-lives = 6
+app = Flask(__name__)
+app.secret_key = 'hangman_secret_key'
 
-print(logo)
-chosen_word = random.choice(word_list)
-# print(chosen_word)
+@app.route('/')
+def index():
+    session.clear()
+    session['lives'] = 6
+    session['chosen_word'] = random.choice(word_list)
+    session['placeholder'] = '_' * len(session['chosen_word'])
+    session['correct_letters'] = []
+    return render_template('index.html', logo=logo, placeholder=session['placeholder'], stages=stages[session['lives']])
 
-placeholder = ''
-word_length = len(chosen_word)
-for position in range(word_length):
-    placeholder += '_'
-print('Word to guess: ' + placeholder)
+@app.route('/guess', methods=['POST'])
+def guess():
+    if 'chosen_word' not in session:
+        return redirect(url_for('index'))
+    
+    guess = request.form['guess'].lower()
+    chosen_word = session['chosen_word']
+    lives = session['lives']
+    correct_letters = session['correct_letters']
+    placeholder = list(session['placeholder'])
 
-game_over = False
-correct_letters = []
+    if guess in correct_letters or guess in placeholder:
+        return render_template('index.html', logo=logo, placeholder=' '.join(placeholder), stages=stages[lives], message=f'You already guessed "{guess}".')
 
-while not game_over:
-
-    # Tell the user how many lives they have left.
-    print(f'****************************{lives}/6 LIVES LEFT****************************')
-    guess = input('Guess a letter: ').lower()
-
-    # If the user has entered a letter they've already guessed, print the letter and let them know.
-    if guess in correct_letters:
-        print(f'You have already guessed "{guess}"!')
-
-    display = ""
-
-    for letter in chosen_word:
-        if letter == guess:
-            display += letter
-            correct_letters.append(guess)
-        elif letter in correct_letters:
-            display += letter
-        else:
-            display += "_"
-
-    print('Word to guess: ' + display)
-
-    # If the letter is not in the chosen_word, print out the letter and let user know it's not in the word.
-    #  e.g. You guessed d, that's not in the word. You lose a life.
-
-    if guess not in chosen_word:
-        print(f'You guessed "{guess}", that is not in the word. You lose a life!')
+    if guess in chosen_word:
+        for i in range(len(chosen_word)):
+            if chosen_word[i] == guess:
+                placeholder[i] = guess
+        session['placeholder'] = ''.join(placeholder)
+        if '_' not in session['placeholder']:
+            return render_template('index.html', logo=logo, placeholder=' '.join(placeholder), stages=stages[lives], message='Congratulations! You won!')
+    else:
         lives -= 1
-
+        session['lives'] = lives
         if lives == 0:
-            game_over = True
+            return render_template('index.html', logo=logo, placeholder=' '.join(placeholder), stages=stages[lives], message=f'Game Over! The correct word was "{chosen_word}".')
 
-            # Show the correct word to user.
-            print(f"***********************Correct word is '{chosen_word}'. YOU LOSE**********************")
+    return render_template('index.html', logo=logo, placeholder=' '.join(placeholder), stages=stages[lives])
 
-    if "_" not in display:
-        game_over = True
-        print("****************************YOU WIN****************************")
-
-    print(stages[lives])
+if __name__ == '__main__':
+    app.run(debug=True, host='127.0.0.1', port=5000)
